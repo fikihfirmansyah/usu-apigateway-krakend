@@ -1,0 +1,123 @@
+{
+  "version": 3,
+  "endpoints": [
+    {
+      "endpoint": "/api/v1/data",
+      "method": "GET",
+      "backend": [
+        {
+          "url_pattern": "/reference/major/1011",
+          "host": ["http://192.168.100.134:8885"],
+          "target": "",
+          "allow": [],
+          "method": "GET",
+          "is_collection": false,
+          "extra_config": {
+            "proxy": {
+              "flatmap_filter": [
+                {
+                  "type": "move",
+                  "args": ["data.old_faculty_id", "data.oldFacultyId"]
+                }
+              ]
+            },
+            "qos/http-cache": {
+              "shared": true
+            }
+          }
+        },
+        {
+          "url_pattern": "/reference/vice-dean/faculty/{resp0_data.old_faculty_id}",
+          "sd": "static",
+          "method": "GET",
+          "host": ["http://192.168.100.134:8885"],
+          "disable_host_sanitize": false,
+          "extra_config": {
+            "proxy": {
+              "flatmap_filter": [
+                {
+                  "type": "move",
+                  "args": ["*", "data.vice_dean"]
+                }
+              ]
+            },
+            "qos/http-cache": {
+              "shared": true
+            }
+          },
+          "target": "data",
+          "group": "vice_dean",
+          "allow": []
+        }
+      ],
+      "extra_config": {
+        "proxy": {
+          "sequential": true
+        },
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://172.17.0.5:8080/realms/usu/protocol/openid-connect/certs",
+          "disable_jwk_security": true
+        }
+      }
+    },
+    {
+      "endpoint": "/v1/lecturers",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+        {
+          "url_pattern": "/reference/lecturer",
+          "encoding": "json",
+          "sd": "static",
+          "method": "GET",
+          "extra_config": {
+            "qos/http-cache": {
+              "@comment": "This APIs returns a cache-control: max-age=0 so KrakenD won't cache this unless changed"
+            },
+            "modifier/martian": {
+              "header.Modifier": {
+                "scope": ["response"],
+                "name": "Cache-Control",
+                "value": "max-age=60, public",
+                "@comment": "We will change the max-age policy before KrakenD checks the content for caching. Now content is cached 60 seconds."
+              }
+            },
+            "qos/ratelimit/proxy": {
+              "max_rate": 1,
+              "capacity": 1,
+              "every": "1s"
+            },
+            "qos/circuit-breaker": {
+              "interval": 60,
+              "name": "circuit-breaker-1",
+              "timeout": 10,
+              "max_errors": 1,
+              "log_status_change": true
+            }
+          },
+          "host": ["http://192.168.100.134:8885"],
+          "disable_host_sanitize": false
+        }
+      ]
+    }
+  ],
+  "extra_config": {
+    "telemetry/opencensus": {
+      "sample_rate": 100,
+      "reporting_period": 1,
+      "enabled_layers": {
+        "backend": true,
+        "router": true
+      },
+      "exporters": {
+        "jaeger": {
+          "endpoint": "http://host.docker.internal:14268/api/traces",
+          "service_name": "krakend"
+        }
+      }
+    }
+  },
+  "output_encoding": "json",
+  "sequential_start": true
+}
